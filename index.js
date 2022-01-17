@@ -1,11 +1,14 @@
 // homebridge-smooth-lock/index.js
+var Service, Characteristic
 const packageJson = require('./package.json')
 const request = require('request')
 const ip = require('ip')
 const http = require('http')
 
 module.exports = (api) => {
-	api.registerAccessory('SmoothLock', SmoothLock);
+	Service = api.hap.Service
+	Characteristic = api.hap.Characteristic
+	api.registerAccessory('homebridge-smooth-lock', 'SmoothLock', SmoothLock);
 };
 
 class SmoothLock {
@@ -15,8 +18,8 @@ class SmoothLock {
 		this.config = config;
 		this.api = api;
 
-		this.Service = this.api.hap.Service;
-		this.Characteristic = this.api.hap.Characteristic;
+		this.Service = Service;
+		this.Characteristic = Characteristic;
 
 		// extract settings from config
 		this.name = config.name
@@ -24,7 +27,7 @@ class SmoothLock {
 		this.pollInterval = config.pollInterval || 300
 
 		this.listenerPort = config.listenerPort || 2000
-		this.requestArray = ['lock', 'unlock', 'validate']
+		this.requestArray = ['locked', 'unlocked', 'validate']
 
 		this.autolock = config.autolock || 'none'
 		this.autoTimeout = 300
@@ -52,34 +55,26 @@ class SmoothLock {
 
 		// create the listener server
 		this.server = http.createServer(function (request, response) {
-			var baseURL = 'http://' + request.headers.host + '/'
-			var url = new URL(request.url, baseURL)
-			if (this.requestArray.includes(url.pathname.substr(1))) {
-				this.log.debug('Handling request: %s', request.url)
+			const baseURL = 'http://' + request.headers.host + '/'
+			const url = new URL(request.url, baseURL)
+			const route = url.pathname.substr(1)
+			if (this.requestArray.includes(route)) {
 				response.end(this.handleListenerRequest(url))
 			} else {
-				this.log.warn('Invalid request: %s', request.url)
+				this.log.warn('Invalid request: %s', route)
 				response.end('Invalid request')
 			}
 		}.bind(this))
 
-		this.server.listen(this.port, function () {
-			this.log('Listen server: http://%s:%s', ip.address(), this.port)
+		this.server.listen(this.listenerPort, function () {
+			this.log('Listen server: http://%s:%s', ip.address(), this.listenerPort)
 		}.bind(this))
 
 		// create a new Lock Mechanism service
 		this.service = new this.Service.LockMechanism(this.name)
-
-		// create handlers for required characteristics
-		this.service.getCharacteristic(this.Characteristic.LockTargetState)
-			.onSet(this.handleSetTarget.bind(this))
-
-		if (this.autolock === 'device' || this.autolock === 'homebridge') {
-			this.service.getCharacteristic(this.Characteristic.LockManagementAutoSecurityTimeout)
-				.onGet(this.handleGetAutoTimeout.bind(this))
-				.onSet(this.handleSetAutoTimeout.bind(this))
-		}
-
+	}
+	
+	getServices() {
 		this.informationService = new this.Service.AccessoryInformation()
 		this.informationService
 			.setCharacteristic(this.Characteristic.Manufacturer, this.manufacturer)
@@ -87,13 +82,25 @@ class SmoothLock {
 			.setCharacteristic(this.Characteristic.SerialNumber, this.serial)
 			.setCharacteristic(this.Characteristic.FirmwareRevision, this.firmware)
 
+		// create handlers for required characteristics
+		this.service.getCharacteristic(this.Characteristic.LockTargetState)
+			.onSet(this.handleSetTarget.bind(this))
+
+
+		if (this.autolock === 'device' || this.autolock === 'homebridge') {
+			this.service.getCharacteristic(this.Characteristic.LockManagementAutoSecurityTimeout)
+				.onGet(this.handleGetAutoTimeout.bind(this))
+				.onSet(this.handleSetAutoTimeout.bind(this))
+		}
+
 		// get the initial status and set up regular status retrievals
 		this.getStatus(function () { })
 
 		setInterval(function () {
 			this.getStatus(function () { })
 		}.bind(this), this.pollInterval * 1000)
-
+		
+		return [this.informationService, this.service]
 	}
 
 	freshToken() {
@@ -115,6 +122,7 @@ class SmoothLock {
 
 	handleListenerRequest(url) {
 		const route = url.pathname.substr(1)
+		this.log.debug('Handling listener request: %s', route)
 		switch (route) {
 			case 'locked':
 				this.service.getCharacteristic(this.Characteristic.LockCurrentState).updateValue(this.Characteristic.LockCurrentState.SECURED)
@@ -190,13 +198,11 @@ class SmoothLock {
 		}
 		const url = this.deviceRoot + route + '?token=' + token + auto
 		this.log.debug('Sending: %s', url)
-		this._httpRequest(url, '', this.method, function (error, response, responseBody) {
+		this.httpRequest(url, '', this.method, function (error, response, responseBody) {
 			if (error) {
 				this.log.warn('Error sending %s: %s', url, error.message)
-				callback(error)
 			} else {
 				this.log('Sent %s', url)
-				callback()
 			}
 		}.bind(this))
 	}
