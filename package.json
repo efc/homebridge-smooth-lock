@@ -1,0 +1,30 @@
+{
+	"name": "homebridge-smooth-lock",
+	"version": "0.0.1",
+	"description": "Homebridge plugin for a web-based lock",
+	"main": "index.js",
+	"engines": {
+		"homebridge": ">=0.4.50",
+		"node": ">=12.13.0"
+	},
+	"dependencies": {
+		"request": ">=2.88.0",
+		"ip": ">=1.1.5"
+	},
+	"scripts": {
+		"test": "echo \"Error: no test specified\" && exit 1"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/efc/homebridge-smooth-lock.git"
+	},
+	"keywords": [
+		"homebridge-plugin"
+	],
+	"author": "efc",
+	"license": "MIT",
+	"bugs": {
+		"url": "https://github.com/efc/homebridge-smooth-lock/issues"
+	},
+	"homepage": "https://github.com/efc/homebridge-smooth-lock#readme"
+}
