@@ -1,5 +1,4 @@
 // homebridge-smooth-lock/index.js
-var Service, Characteristic
 const packageJson = require('./package.json')
 const request = require('request')
 const ip = require('ip')
@@ -18,30 +17,30 @@ class SmoothLock {
 		this.config = config;
 		this.api = api;
 
-		this.Service = Service;
-		this.Characteristic = Characteristic;
+		this.Service = this.api.hap.Service;
+		this.Characteristic = this.api.hap.Characteristic;
 
 		// extract settings from config
 		this.name = config.name
 		this.deviceRoot = config.deviceRoot
 		this.pollInterval = config.pollInterval || 300
 
-		this.listenerPort = config.listenerPort || 2000
+		this.listenerPort = config.listenerPort || 8282
 		this.requestArray = ['locked', 'unlocked', 'validate']
 
 		this.autolock = config.autolock || 'none'
-		this.autoTimeout = 300
+		this.autolockDelay = config.autolockDelay || 300
 
 		this.manufacturer = config.manufacturer || packageJson.author
-		this.serial = config.serial || packageJson.version
+		this.serial = config.serial || this.deviceRoot
 		this.model = config.model || packageJson.name
 		this.firmware = config.firmware || packageJson.version
 
 		this.username = config.username || null
 		this.password = config.password || null
-		this.timeout = config.timeout || 3000
+		this.timeout = config.timeout || 3
 		this.method = config.method || 'GET'
-		this.tokenTimeout = config.tokenTimeout === 0 ? 0 : (config.tokenTimeout || 2000)
+		this.tokenTimeout = config.tokenTimeout === 0 ? 0 : (config.tokenTimeout || 2)
 
 		if (this.username != null && this.password != null) {
 			this.auth = {
@@ -96,14 +95,24 @@ class SmoothLock {
 		// get the initial status and set up regular status retrievals
 		this.getStatus(function () { })
 
-		setInterval(function () {
+		setInterval( () => {
 			this.getStatus(function () { })
-		}.bind(this), this.pollInterval * 1000)
+		}, this.pollInterval * 1000)
 		
 		return [this.informationService, this.service]
 	}
 
+	pruneTokens() {
+		const now = Date.now()
+		for (var token in this.tokens) {
+			if (this.tokens.hasOwnProperty(token) && this.tokens[token] + (this.tokenTimeout * 1000) < now) {
+				delete this.tokens[token]
+			}
+		}
+	}
+	
 	freshToken() {
+		this.pruneTokens()
 		const token = Math.random().toString(16).substr(2, 8)
 		const now = Date.now()
 		this.tokens[token] = now
@@ -112,12 +121,18 @@ class SmoothLock {
 
 	isValidToken(token) {
 		const created = this.tokens[token]
+		this.log('----- DEBUG ----- Checking token "%s" create %s in %s', token, created, JSON.stringify(this.tokens))
 		delete this.tokens[token]
-		return (created && ((created + this.tokenTimeout) < Date.now()))
+		this.pruneTokens()
+		return (created && ((created + (this.tokenTimeout * 1000)) > Date.now()))
 	}
 
 	startAutolockTimer() {
-
+		this.log('Starting %s second timer for autolock', this.autolockDelay)
+		setTimeout(() => {
+			this.log('Autolocking...')
+			this.service.setCharacteristic(this.Characteristic.LockTargetState, 1)
+		}, this.autolockDelay * 1000)
 	}
 
 	handleListenerRequest(url) {
@@ -131,7 +146,7 @@ class SmoothLock {
 			case 'unlocked':
 				this.service.getCharacteristic(this.Characteristic.LockCurrentState).updateValue(this.Characteristic.LockCurrentState.UNSECURED)
 				this.log('Updated current to unlocked')
-				if (this.autolock === 'homebridge') {
+				if (this.autolock === 'plugin') {
 					this.startAutolockTimer()
 				}
 				return ('Homebridge updated')
@@ -157,7 +172,7 @@ class SmoothLock {
 			url: url,
 			body: body,
 			method: this.method,
-			timeout: this.timeout,
+			timeout: this.timeout * 1000,
 			rejectUnauthorized: false,
 			auth: this.auth
 		}, function (error, response, body) {
@@ -166,7 +181,8 @@ class SmoothLock {
 	}
 
 	getStatus(callback) {
-		var url = this.deviceRoot + '/status'
+		const token = this.freshToken()
+		const url = this.deviceRoot + '/status?token=' + token
 		this.log.debug('Getting status: %s', url)
 		this.httpRequest(url, '', 'GET', function (error, response, responseBody) {
 			if (error) {
@@ -194,7 +210,7 @@ class SmoothLock {
 		const token = this.freshToken()
 		var auto = ''
 		if (route === '/unlock' && this.autolock === 'device') {
-			auto = '&auto=300'
+			auto = '&auto=' + this.autolockDelay
 		}
 		const url = this.deviceRoot + route + '?token=' + token + auto
 		this.log.debug('Sending: %s', url)
