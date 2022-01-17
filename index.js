@@ -1,5 +1,7 @@
 // homebridge-smooth-lock/index.js
 const packageJson = require('./package.json')
+const request = require('request')
+const ip = require('ip')
 const http = require('http')
 
 module.exports = (api) => {
