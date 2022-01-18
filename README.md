@@ -21,6 +21,8 @@ Note, once we have a real NPM package available we should simplify this installa
 
 ## Configuration
 
+The configuration of each accessory using this plugin is done by directly editing a bit of JSON in the Homebridge application. The configuration will look something like this.
+
 ```json
 "accessories": [
      {
@@ -30,14 +32,20 @@ Note, once we have a real NPM package available we should simplify this installa
      }
 ]
 ```
-### Core
-| Key          | Description                    | Default |
-| ------------ | ------------------------------ | ------- |
-| `accessory`  | Must be `SmoothLock`           | N/A     |
-| `name`       | Name to appear in the Home app | N/A     |
-| `deviceRoot` | Root URL of your device        | N/A     |
+### Core configuration
 
-### Optional fields
+None of these core items have default values, so you must define them in the configuration.
+
+| Key          | Description                    |
+| ------------ | ------------------------------ |
+| `accessory`  | Must be `SmoothLock`           |
+| `name`       | Name to appear in the Home app |
+| `deviceRoot` | Root URL of your device        |
+
+### Optional configuration
+
+Each of these optional items either has a default value or is not necessary to the operation of the plugin. Of course, you may override any of these default values.
+
 | Key             | Description                                                                                                | Default    |
 | --------------- | ---------------------------------------------------------------------------------------------------------- | ---------- |
 | `listenerPort`  | Port for your HTTP listener (only one listener per port)                                                   | `8282`     |
@@ -53,3 +61,77 @@ Note, once we have a real NPM package available we should simplify this installa
 | `manufacturer`  | Appears under the _Manufacturer_ field for the accessory                                                   | author     |
 | `firmware`      | Appears under the _Firmware_ field for the accessory                                                       | version    |
 | `tokenTimeout`  | Time (seconds) until a validation token becomes invalid, use `0` to ignore validation tokens               | `2`        |
+
+## Device API
+
+The device is the microcontroller managing the lock itself. We expect that this device is on the network and running a web server capable of responding to the following REST requests.
+
+### Status
+```
+/status?token=RANDOM_STRING
+```
+
+Asks the device to report its locked or unlocked state. The device will respond with JSON describing both the target lock state and the current lock state where `1` means secured, a `0` means unsecured.
+
+```
+{
+  "target": 1,
+  "current": 1
+}
+```
+
+### Lock
+
+```
+/lock?token=RANDOM_STRING
+```
+
+Asks the device to secure itself. The response will be ignored. The `token` value will be one that the listener is prepared to validate with a `/validate` call.
+
+Note that once the lock is confirmed to be secured, the device should send the listener a `/locked` call.
+
+### Unlock
+
+```
+/unlock?token=RANDOM_STRING&auto=INTEGER
+```
+
+Asks the device to unsecure itself. The response will be ignored. The `token` value will be one that the listener is prepared to validate with a `/validate` call. If the configuration specifies that the device is managing the `autolock` timing itself, then the desired delay will be included as seconds in the `auto` value.
+
+Note that once the lock is confirmed to be unsecured, the device should send the listener an `/unlocked` call.
+
+## Listener API
+
+The listener will be set up by this plugin using the Homebridge's own host name and the `listenerPort` supplied in the configuration. You will have to configure your device to communicate with this specific listener. The listener server responds to the following REST requests.
+
+### Locked
+
+```
+/locked
+```
+
+Informs the Homebridge listener that the device has been successfully locked.
+
+### Unlocked
+
+```
+/unlocked
+```
+
+Informs the Homebridge listener that the device has been successfully unlocked.
+
+### Validate
+
+```
+/validate?token=STRING
+```
+
+Asks the Homebridge listener to validate a token. The listener will respond with 1 if the token was valid or 0 if the token was invalid. This token should be the same token that the device received with the calls to its own API. The listener will respond `valid` if the token is valid, any other response should be considered invalid.
+
+Note that if the `tokenTimeout` supplied in the configuration is set to `0` (zero), then any string you try to validate will be accepted as valid. This effectively breaks security, but can make certain testing easier.
+
+## Changelog
+
+### 1.0 - January 2022
+
+Initial version. This plugin owes a lot to [homebridge-web-lock](https://github.com/phenotypic/homebridge-web-lock). While we made quite a few changes, that plugin showed us how all this fits together and works.

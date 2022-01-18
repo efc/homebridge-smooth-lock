@@ -1,22 +1,30 @@
-// homebridge-smooth-lock/index.js
+// Homebridge Accessory Plugin: homebridge-smooth-lock
+// Author: Eric Celeste
+// License: MIT License
+// Created: January 2022
+
 const packageJson = require('./package.json')
 const request = require('request')
 const ip = require('ip')
 const http = require('http')
 
 module.exports = (api) => {
-	api.registerAccessory('homebridge-smooth-lock', 'SmoothLock', SmoothLock);
-};
+	api.registerAccessory('homebridge-smooth-lock', 'SmoothLock', SmoothLock)
+}
 
 class SmoothLock {
 
+	/**
+	 * This is the constructor Homebridge will call when creating
+	 * a new instance of our accessory.
+	 */
 	constructor(log, config, api) {
-		this.log = log;
-		this.config = config;
-		this.api = api;
+		this.log = log
+		this.config = config
+		this.api = api
 
-		this.Service = this.api.hap.Service;
-		this.Characteristic = this.api.hap.Characteristic;
+		this.Service = this.api.hap.Service
+		this.Characteristic = this.api.hap.Characteristic
 
 		// extract settings from config
 		this.name = config.name
@@ -47,7 +55,9 @@ class SmoothLock {
 			}
 		}
 
-		// create a dictionary to hold our validation tokens
+		/**
+		 * Array of one-time tokens and their expiration date.
+		 */
 		this.tokens = {}
 
 		// create the listener server
@@ -70,7 +80,15 @@ class SmoothLock {
 		// create a new Lock Mechanism service
 		this.service = new this.Service.LockMechanism(this.name)
 	}
-	
+
+	/**
+	 * This is a function that Homebridge calls to learn more about 
+	 * our accessory characteristics. Since this happens early in the 
+	 * instanciation of our accessory, it also serves as a good place
+	 * to set up our status checking interval.
+	 * 
+	 * @returns {Tuple}
+	 */
 	getServices() {
 		this.informationService = new this.Service.AccessoryInformation()
 		this.informationService
@@ -87,22 +105,19 @@ class SmoothLock {
 		// get the initial status and set up regular status retrievals
 		this.getStatus(function () { })
 
-		setInterval( () => {
+		setInterval(() => {
 			this.getStatus(function () { })
 		}, this.pollInterval * 1000)
-		
+
 		return [this.informationService, this.service]
 	}
 
-	pruneTokens() {
-		const now = Date.now()
-		for (var token in this.tokens) {
-			if (this.tokens.hasOwnProperty(token) && this.tokens[token] + (this.tokenTimeout * 1000) < now) {
-				delete this.tokens[token]
-			}
-		}
-	}
-	
+	/**
+	 * Creates a new one-time token and saves it's creation time 
+	 * in the tokens dictionary.
+	 * 
+	 * @returns {String} the new one-time token
+	 */
 	freshToken() {
 		this.pruneTokens()
 		const token = Math.random().toString(16).substr(2, 8)
@@ -111,6 +126,13 @@ class SmoothLock {
 		return token
 	}
 
+	/**
+	 * Looks the given token up in the tokens dictionary and
+	 * determines if it is still valid or not. Any token that is
+	 * looked up is also deleted.
+	 * 
+	 * @returns {Boolean} True if the token is valid
+	 */
 	isValidToken(token) {
 		const created = this.tokens[token]
 		this.log.debug('Checking token "%s" create %s in %s', token, created, JSON.stringify(this.tokens))
@@ -119,6 +141,24 @@ class SmoothLock {
 		return (created && ((created + (this.tokenTimeout * 1000)) > Date.now()))
 	}
 
+	/**
+	 * Removes from the tokens dictionary all the 
+	 * tokens who's time has expired.
+	 */
+	pruneTokens() {
+		const now = Date.now()
+		for (var token in this.tokens) {
+			if (this.tokens.hasOwnProperty(token) && this.tokens[token] + (this.tokenTimeout * 1000) < now) {
+				delete this.tokens[token]
+			}
+		}
+	}
+
+	/**
+	 * If this plugin is managing the autolock delay,
+	 * then it uses this function to set the timeout
+	 * for re-securing the lock.
+	 */
 	startAutolockTimer() {
 		this.log('Starting %s second timer for autolock', this.autolockDelay)
 		setTimeout(() => {
@@ -127,6 +167,10 @@ class SmoothLock {
 		}, this.autolockDelay * 1000)
 	}
 
+	/**
+	 * Decide what to do in response to each route
+	 * sent to the listener server.
+	 */
 	handleListenerRequest(url) {
 		const route = url.pathname.substr(1)
 		this.log.debug('Handling listener request: %s', route)
@@ -159,6 +203,9 @@ class SmoothLock {
 		return ('Unknown route "%s"', route)
 	}
 
+	/**
+	 * Simplifies making an HTTP request with our standard timeout.
+	 */
 	httpRequest(url, body, method, callback) {
 		request({
 			url: url,
@@ -172,6 +219,10 @@ class SmoothLock {
 		})
 	}
 
+	/**
+	 * Asks the device for its status and passes what the
+	 * device reports on to Homebridge.
+	 */
 	getStatus(callback) {
 		const token = this.freshToken()
 		const url = this.deviceRoot + '/status?token=' + token
@@ -197,6 +248,12 @@ class SmoothLock {
 		}.bind(this))
 	}
 
+	/**
+	 * Called by Homebridge any time the target value of the lock is set.
+	 * This then calls on the device itself to change it's state.
+	 * 
+	 * @param {Integer} value will be 0 for unsecured or 1 for secured
+	 */
 	handleSetTarget(value) {
 		const route = value ? '/lock' : '/unlock'
 		const token = this.freshToken()
