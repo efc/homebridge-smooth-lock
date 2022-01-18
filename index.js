@@ -5,8 +5,6 @@ const ip = require('ip')
 const http = require('http')
 
 module.exports = (api) => {
-	Service = api.hap.Service
-	Characteristic = api.hap.Characteristic
 	api.registerAccessory('homebridge-smooth-lock', 'SmoothLock', SmoothLock);
 };
 
@@ -86,12 +84,6 @@ class SmoothLock {
 			.onSet(this.handleSetTarget.bind(this))
 
 
-		if (this.autolock === 'device' || this.autolock === 'homebridge') {
-			this.service.getCharacteristic(this.Characteristic.LockManagementAutoSecurityTimeout)
-				.onGet(this.handleGetAutoTimeout.bind(this))
-				.onSet(this.handleSetAutoTimeout.bind(this))
-		}
-
 		// get the initial status and set up regular status retrievals
 		this.getStatus(function () { })
 
@@ -121,7 +113,7 @@ class SmoothLock {
 
 	isValidToken(token) {
 		const created = this.tokens[token]
-		this.log('----- DEBUG ----- Checking token "%s" create %s in %s', token, created, JSON.stringify(this.tokens))
+		this.log.debug('Checking token "%s" create %s in %s', token, created, JSON.stringify(this.tokens))
 		delete this.tokens[token]
 		this.pruneTokens()
 		return (created && ((created + (this.tokenTimeout * 1000)) > Date.now()))
@@ -221,17 +213,6 @@ class SmoothLock {
 				this.log('Sent %s', url)
 			}
 		}.bind(this))
-	}
-
-	handleGetAutoTimeout() {
-		this.log('Getting auto timeout (not really)')
-		return (this.autoTimeout)
-	}
-
-	handleSetAutoTimeout(seconds) {
-		this.log('Setting auto timeout (not really)')
-		this.autoTimeout = seconds
-		return
 	}
 
 }
