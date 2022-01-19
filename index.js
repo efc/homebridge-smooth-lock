@@ -123,6 +123,7 @@ class SmoothLock {
 		const token = Math.random().toString(16).substr(2, 8)
 		const now = Date.now()
 		this.tokens[token] = now
+		this.log('--- DEBUG --- Tokens %s', JSON.stringify(this.tokens))
 		return token
 	}
 
@@ -134,8 +135,9 @@ class SmoothLock {
 	 * @returns {Boolean} True if the token is valid
 	 */
 	isValidToken(token) {
+		token = token.replace(/['""']/g, '')
 		const created = this.tokens[token]
-		this.log.debug('Checking token "%s" create %s in %s', token, created, JSON.stringify(this.tokens))
+		this.log.debug("Checking token '%s' create %s in %s", token, created, JSON.stringify(this.tokens))
 		delete this.tokens[token]
 		this.pruneTokens()
 		return (created && ((created + (this.tokenTimeout * 1000)) > Date.now()))
@@ -173,20 +175,25 @@ class SmoothLock {
 	 */
 	handleListenerRequest(url) {
 		const route = url.pathname.substr(1)
-		this.log.debug('Handling listener request: %s', route)
+		this.log.debug("Handling listener request: %s", route)
 		switch (route) {
 			case 'locked':
+				this.log.debug("Locked")
+				this.service.getCharacteristic(this.Characteristic.LockTargetState).updateValue(this.Characteristic.LockCurrentState.SECURED)
 				this.service.getCharacteristic(this.Characteristic.LockCurrentState).updateValue(this.Characteristic.LockCurrentState.SECURED)
 				this.log('Updated current to locked')
 				return ('Homebridge updated')
 			case 'unlocked':
-				this.service.getCharacteristic(this.Characteristic.LockCurrentState).updateValue(this.Characteristic.LockCurrentState.UNSECURED)
+				this.log.debug("Unlocked")
+				this.service.getCharacteristic(this.Characteristic.LockTargetState).updateValue(this.Characteristic.LockTargetState.UNSECURED)
+				this.service.getCharacteristic(this.Characteristic.LockCurrentState).updateValue(this.Characteristic.LockTargetState.UNSECURED)
 				this.log('Updated current to unlocked')
 				if (this.autolock === 'plugin') {
 					this.startAutolockTimer()
 				}
 				return ('Homebridge updated')
 			case 'validate':
+				this.log.debug("Validate")
 				if (this.tokenTimeout) {
 					const token = url.searchParams.get('token')
 					if (token) {
@@ -237,12 +244,10 @@ class SmoothLock {
 				try {
 					var json = JSON.parse(responseBody)
 					this.service.getCharacteristic(this.Characteristic.LockCurrentState).updateValue(json.current == 1 ? this.Characteristic.LockCurrentState.SECURED : this.Characteristic.LockCurrentState.UNSECURED)
-					this.log.debug('Updated current state to: %s', json.current)
 					this.service.getCharacteristic(this.Characteristic.LockTargetState).updateValue(json.target == 1 ? this.Characteristic.LockTargetState.SECURED : this.Characteristic.LockTargetState.UNSECURED)
-					this.log.debug('Updated target state to: %s', json.target)
 					callback()
 				} catch (e) {
-					this.log.warn('Error parsing status response: %s', e.message)
+					this.log.warn('Error parsing status response: %s\nError message: %s', responseBody, e.message)
 				}
 			}
 		}.bind(this))
@@ -262,7 +267,7 @@ class SmoothLock {
 			auto = '&auto=' + this.autolockDelay
 		}
 		const url = this.deviceRoot + route + '?token=' + token + auto
-		this.log.debug('Sending: %s', url)
+		this.log.debug("Sending: %s", url)
 		this.httpRequest(url, '', this.method, function (error, response, responseBody) {
 			if (error) {
 				this.log.warn('Error sending %s: %s', url, error.message)
