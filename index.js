@@ -123,7 +123,7 @@ class SmoothLock {
 		const token = Math.random().toString(16).substr(2, 8)
 		const now = Date.now()
 		this.tokens[token] = now
-		this.log('--- DEBUG --- Tokens %s', JSON.stringify(this.tokens))
+		this.log.debug("Tokens %s", JSON.stringify(this.tokens))
 		return token
 	}
 
