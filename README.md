@@ -1,4 +1,5 @@
 # homebridge-smooth-lock
+[![NPM Version](https://img.shields.io/npm/v/homebridge-smooth-lock.svg)](https://www.npmjs.com/package/homebridge-smooth-lock)
 
 ## Description
 
