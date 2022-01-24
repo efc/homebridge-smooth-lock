@@ -133,6 +133,10 @@ Note that if the `tokenTimeout` supplied in the configuration is set to `0` (zer
 
 ## Changelog
 
-### 1.0 - January 2022
+### 1.0.1 - January 2022
+
+Add NPM shield to readme.
+
+### 1.0.0
 
 Initial version. This plugin owes a lot to [homebridge-web-lock](https://github.com/phenotypic/homebridge-web-lock). While we made quite a few changes, that plugin showed us how all this fits together and works.
