@@ -4,7 +4,7 @@
 	"description": "Homebridge plugin for a web-based lock",
 	"main": "index.js",
 	"engines": {
-		"homebridge": ">=0.4.50",
+		"homebridge": ">=0.4.50 || ^1.6.0 || ^2.0.0-beta.0",
 		"node": ">=12.13.0"
 	},
 	"dependencies": {
